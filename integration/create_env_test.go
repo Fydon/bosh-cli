@@ -96,7 +96,7 @@ var _ = Describe("bosh", func() {
 			fakeRegistryUUIDGenerator     *fakeuuid.FakeGenerator
 			fakeRepoUUIDGenerator         *fakeuuid.FakeGenerator
 			fakeAgentIDGenerator          *fakeuuid.FakeGenerator
-			fakeSHA1Calculator            *fakebicrypto.FakeSha1Calculator
+			fakeDigestCalculator          *fakebicrypto.FakeDigestCalculator
 			legacyDeploymentStateMigrator biconfig.LegacyDeploymentStateMigrator
 			deploymentStateService        biconfig.DeploymentStateService
 			vmRepo                        biconfig.VMRepo
@@ -204,8 +204,8 @@ cloud_provider:
 			}
 			updateManifest(context)
 
-			fakeSHA1Calculator.SetCalculateBehavior(map[string]fakebicrypto.CalculateInput{
-				deploymentManifestPath: {Sha1: "fake-deployment-sha1-1"},
+			fakeDigestCalculator.SetCalculateBehavior(map[string]fakebicrypto.CalculateInput{
+				deploymentManifestPath: {DigestStr: "fake-deployment-sha1-1"},
 			})
 		}
 
@@ -215,8 +215,8 @@ cloud_provider:
 			}
 			updateManifest(context)
 
-			fakeSHA1Calculator.SetCalculateBehavior(map[string]fakebicrypto.CalculateInput{
-				deploymentManifestPath: {Sha1: "fake-deployment-sha1-2"},
+			fakeDigestCalculator.SetCalculateBehavior(map[string]fakebicrypto.CalculateInput{
+				deploymentManifestPath: {DigestStr: "fake-deployment-sha1-2"},
 			})
 		}
 
@@ -378,7 +378,7 @@ cloud_provider:
 				)
 				fakeHTTPClient := fakebihttpclient.NewFakeHTTPClient()
 				tarballCache := bitarball.NewCache("fake-base-path", fs, logger)
-				tarballProvider := bitarball.NewProvider(tarballCache, fs, fakeHTTPClient, fakeSHA1Calculator, 1, 0, logger)
+				tarballProvider := bitarball.NewProvider(tarballCache, fs, fakeHTTPClient, 1, 0, logger)
 
 				cpiInstaller := bicpirel.CpiInstaller{
 					ReleaseManager:   releaseManager,
@@ -458,6 +458,7 @@ cloud_provider:
 
 				mockCloud.EXPECT().CreateDisk(diskSize, diskCloudProperties, vmCID).Return(diskCID, nil),
 				mockCloud.EXPECT().AttachDisk(vmCID, diskCID),
+				mockAgentClient.EXPECT().Ping().Return("any-state", nil),
 				mockAgentClient.EXPECT().MountDisk(diskCID),
 
 				mockAgentClient.EXPECT().Apply(applySpec),
@@ -498,12 +499,15 @@ cloud_provider:
 
 				// attach both disks and migrate
 				mockCloud.EXPECT().AttachDisk(newVMCID, oldDiskCID),
+				mockAgentClient.EXPECT().Ping().Return("any-state", nil),
 				mockAgentClient.EXPECT().MountDisk(oldDiskCID),
 				mockCloud.EXPECT().CreateDisk(newDiskSize, diskCloudProperties, newVMCID).Return(newDiskCID, nil),
 				mockCloud.EXPECT().AttachDisk(newVMCID, newDiskCID),
+				mockAgentClient.EXPECT().Ping().Return("any-state", nil),
 				mockAgentClient.EXPECT().MountDisk(newDiskCID),
 				mockAgentClient.EXPECT().MigrateDisk(),
 				mockCloud.EXPECT().DetachDisk(newVMCID, oldDiskCID),
+				mockAgentClient.EXPECT().Ping().Return("any-state", nil),
 				mockCloud.EXPECT().DeleteDisk(oldDiskCID),
 
 				// start jobs & wait for running
@@ -541,12 +545,15 @@ cloud_provider:
 
 				// attach both disks and migrate
 				mockCloud.EXPECT().AttachDisk(newVMCID, oldDiskCID),
+				mockAgentClient.EXPECT().Ping().Return("any-state", nil),
 				mockAgentClient.EXPECT().MountDisk(oldDiskCID),
 				mockCloud.EXPECT().CreateDisk(newDiskSize, diskCloudProperties, newVMCID).Return(newDiskCID, nil),
 				mockCloud.EXPECT().AttachDisk(newVMCID, newDiskCID),
+				mockAgentClient.EXPECT().Ping().Return("any-state", nil),
 				mockAgentClient.EXPECT().MountDisk(newDiskCID),
 				mockAgentClient.EXPECT().MigrateDisk(),
 				mockCloud.EXPECT().DetachDisk(newVMCID, oldDiskCID),
+				mockAgentClient.EXPECT().Ping().Return("any-state", nil),
 				mockCloud.EXPECT().DeleteDisk(oldDiskCID),
 
 				// start jobs & wait for running
@@ -617,9 +624,11 @@ cloud_provider:
 
 				// attach both disks and migrate (with error)
 				mockCloud.EXPECT().AttachDisk(newVMCID, oldDiskCID),
+				mockAgentClient.EXPECT().Ping().Return("any-state", nil),
 				mockAgentClient.EXPECT().MountDisk(oldDiskCID),
 				mockCloud.EXPECT().CreateDisk(newDiskSize, diskCloudProperties, newVMCID).Return(newDiskCID, nil),
 				mockCloud.EXPECT().AttachDisk(newVMCID, newDiskCID),
+				mockAgentClient.EXPECT().Ping().Return("any-state", nil),
 				mockAgentClient.EXPECT().MountDisk(newDiskCID),
 				mockAgentClient.EXPECT().MigrateDisk().Return(
 					bosherr.Error("fake-migration-error"),
@@ -652,12 +661,15 @@ cloud_provider:
 
 				// attach both disks and migrate
 				mockCloud.EXPECT().AttachDisk(newVMCID, oldDiskCID),
+				mockAgentClient.EXPECT().Ping().Return("any-state", nil),
 				mockAgentClient.EXPECT().MountDisk(oldDiskCID),
 				mockCloud.EXPECT().CreateDisk(newDiskSize, diskCloudProperties, newVMCID).Return(newDiskCID, nil),
 				mockCloud.EXPECT().AttachDisk(newVMCID, newDiskCID),
+				mockAgentClient.EXPECT().Ping().Return("any-state", nil),
 				mockAgentClient.EXPECT().MountDisk(newDiskCID),
 				mockAgentClient.EXPECT().MigrateDisk(),
 				mockCloud.EXPECT().DetachDisk(newVMCID, oldDiskCID),
+				mockAgentClient.EXPECT().Ping().Return("any-state", nil),
 				mockCloud.EXPECT().DeleteDisk(oldDiskCID),
 
 				// start jobs & wait for running
@@ -685,7 +697,7 @@ cloud_provider:
 
 			fakeAgentIDGenerator = fakeuuid.NewFakeGenerator()
 
-			fakeSHA1Calculator = fakebicrypto.NewFakeSha1Calculator()
+			fakeDigestCalculator = fakebicrypto.NewFakeDigestCalculator()
 
 			mockInstaller = mock_install.NewMockInstaller(mockCtrl)
 			mockInstallerFactory = mock_install.NewMockInstallerFactory(mockCtrl)

@@ -5,6 +5,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/cloudfoundry/bosh-cli/ui"
 	semver "github.com/cppforlife/go-semi-semantic/version"
 )
 
@@ -12,6 +13,7 @@ import (
 
 type Director interface {
 	IsAuthenticated() (bool, error)
+	WithContext(id string) Director
 	Info() (Info, error)
 
 	Locks() ([]Lock, error)
@@ -19,6 +21,7 @@ type Director interface {
 	CurrentTasks(TasksFilter) ([]Task, error)
 	RecentTasks(int, TasksFilter) ([]Task, error)
 	FindTask(int) (Task, error)
+	FindTasksByContextId(string) ([]Task, error)
 
 	Events(EventsFilter) ([]Event, error)
 
@@ -78,7 +81,7 @@ type StemcellArchive interface {
 //go:generate counterfeiter . FileReporter
 
 type FileReporter interface {
-	TrackUpload(int64, io.ReadCloser) io.ReadCloser
+	TrackUpload(int64, io.ReadCloser) ui.ReadSeekCloser
 	TrackDownload(int64, io.Writer) io.Writer
 }
 
@@ -95,10 +98,11 @@ type Deployment interface {
 
 	Stemcells() ([]Stemcell, error)
 	VMInfos() ([]VMInfo, error)
+	Instances() ([]Instance, error)
 	InstanceInfos() ([]VMInfo, error)
 
 	Errands() ([]Errand, error)
-	RunErrand(string, bool) (ErrandResult, error)
+	RunErrand(string, bool, bool) ([]ErrandResult, error)
 
 	ScanForProblems() ([]Problem, error)
 	ResolveProblems([]ProblemAnswer) error
@@ -221,6 +225,7 @@ type Task interface {
 	IsError() bool
 	User() string
 	DeploymentName() string
+	ContextID() string
 
 	Description() string
 	Result() string

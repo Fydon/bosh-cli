@@ -162,6 +162,32 @@ var _ = Describe("Factory", func() {
 		})
 	})
 
+	Describe("gateway flags", func() {
+		It("ssh command has configured gateway flags", func() {
+			cmd, err := factory.New([]string{"ssh", "group", "cmd", "extra", "args", "--", "--gw-disable"})
+			Expect(err).ToNot(HaveOccurred())
+
+			_, _, err = cmd.Opts.(*SSHOpts).GatewayFlags.AsSSHOpts()
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		It("scp command has configured gateway flags", func() {
+			cmd, err := factory.New([]string{"scp", "group", "cmd", "extra", "args", "--", "--gw-disable"})
+			Expect(err).ToNot(HaveOccurred())
+
+			_, _, err = cmd.Opts.(*SCPOpts).GatewayFlags.AsSSHOpts()
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		It("logs -f command has configured gateway flags", func() {
+			cmd, err := factory.New([]string{"logs", "-f", "cmd"})
+			Expect(err).ToNot(HaveOccurred())
+
+			_, _, err = cmd.Opts.(*LogsOpts).GatewayFlags.AsSSHOpts()
+			Expect(err).ToNot(HaveOccurred())
+		})
+	})
+
 	Describe("deploy command", func() {
 		BeforeEach(func() {
 			err := fs.WriteFileString("/file", "")
@@ -248,6 +274,16 @@ var _ = Describe("Factory", func() {
 		})
 	})
 
+	Describe("instances command", func() {
+		It("is passed the deployment flag", func() {
+			cmd, err := factory.New([]string{"instances", "--deployment", "deployment"})
+			Expect(err).ToNot(HaveOccurred())
+
+			opts := cmd.Opts.(*InstancesOpts)
+			Expect(opts.Deployment).To(Equal("deployment"))
+		})
+	})
+
 	Describe("tasks command", func() {
 		It("is passed the deployment flag", func() {
 			cmd, err := factory.New([]string{"tasks", "--deployment", "deployment"})
@@ -322,6 +358,8 @@ var _ = Describe("Factory", func() {
 			boshOpts.RemoveBlob = RemoveBlobOpts{}
 			boshOpts.SyncBlobs = SyncBlobsOpts{}
 			boshOpts.UploadBlobs = UploadBlobsOpts{}
+			boshOpts.SSH = SSHOpts{}
+			boshOpts.SCP = SCPOpts{}
 			return boshOpts
 		}
 
