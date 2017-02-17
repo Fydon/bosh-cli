@@ -22,12 +22,12 @@ type FakeBlobsDir struct {
 		result1 []releasedir.Blob
 		result2 error
 	}
-	DownloadBlobsStub        func(numOfParallelWorkers int) error
-	downloadBlobsMutex       sync.RWMutex
-	downloadBlobsArgsForCall []struct {
+	SyncBlobsStub        func(numOfParallelWorkers int) error
+	syncBlobsMutex       sync.RWMutex
+	syncBlobsArgsForCall []struct {
 		numOfParallelWorkers int
 	}
-	downloadBlobsReturns struct {
+	syncBlobsReturns struct {
 		result1 error
 	}
 	UploadBlobsStub        func() error
@@ -65,8 +65,9 @@ func (fake *FakeBlobsDir) Init() error {
 	fake.initMutex.Unlock()
 	if fake.InitStub != nil {
 		return fake.InitStub()
+	} else {
+		return fake.initReturns.result1
 	}
-	return fake.initReturns.result1
 }
 
 func (fake *FakeBlobsDir) InitCallCount() int {
@@ -89,8 +90,9 @@ func (fake *FakeBlobsDir) Blobs() ([]releasedir.Blob, error) {
 	fake.blobsMutex.Unlock()
 	if fake.BlobsStub != nil {
 		return fake.BlobsStub()
+	} else {
+		return fake.blobsReturns.result1, fake.blobsReturns.result2
 	}
-	return fake.blobsReturns.result1, fake.blobsReturns.result2
 }
 
 func (fake *FakeBlobsDir) BlobsCallCount() int {
@@ -107,34 +109,35 @@ func (fake *FakeBlobsDir) BlobsReturns(result1 []releasedir.Blob, result2 error)
 	}{result1, result2}
 }
 
-func (fake *FakeBlobsDir) DownloadBlobs(numOfParallelWorkers int) error {
-	fake.downloadBlobsMutex.Lock()
-	fake.downloadBlobsArgsForCall = append(fake.downloadBlobsArgsForCall, struct {
+func (fake *FakeBlobsDir) SyncBlobs(numOfParallelWorkers int) error {
+	fake.syncBlobsMutex.Lock()
+	fake.syncBlobsArgsForCall = append(fake.syncBlobsArgsForCall, struct {
 		numOfParallelWorkers int
 	}{numOfParallelWorkers})
-	fake.recordInvocation("DownloadBlobs", []interface{}{numOfParallelWorkers})
-	fake.downloadBlobsMutex.Unlock()
-	if fake.DownloadBlobsStub != nil {
-		return fake.DownloadBlobsStub(numOfParallelWorkers)
+	fake.recordInvocation("SyncBlobs", []interface{}{numOfParallelWorkers})
+	fake.syncBlobsMutex.Unlock()
+	if fake.SyncBlobsStub != nil {
+		return fake.SyncBlobsStub(numOfParallelWorkers)
+	} else {
+		return fake.syncBlobsReturns.result1
 	}
-	return fake.downloadBlobsReturns.result1
 }
 
-func (fake *FakeBlobsDir) DownloadBlobsCallCount() int {
-	fake.downloadBlobsMutex.RLock()
-	defer fake.downloadBlobsMutex.RUnlock()
-	return len(fake.downloadBlobsArgsForCall)
+func (fake *FakeBlobsDir) SyncBlobsCallCount() int {
+	fake.syncBlobsMutex.RLock()
+	defer fake.syncBlobsMutex.RUnlock()
+	return len(fake.syncBlobsArgsForCall)
 }
 
-func (fake *FakeBlobsDir) DownloadBlobsArgsForCall(i int) int {
-	fake.downloadBlobsMutex.RLock()
-	defer fake.downloadBlobsMutex.RUnlock()
-	return fake.downloadBlobsArgsForCall[i].numOfParallelWorkers
+func (fake *FakeBlobsDir) SyncBlobsArgsForCall(i int) int {
+	fake.syncBlobsMutex.RLock()
+	defer fake.syncBlobsMutex.RUnlock()
+	return fake.syncBlobsArgsForCall[i].numOfParallelWorkers
 }
 
-func (fake *FakeBlobsDir) DownloadBlobsReturns(result1 error) {
-	fake.DownloadBlobsStub = nil
-	fake.downloadBlobsReturns = struct {
+func (fake *FakeBlobsDir) SyncBlobsReturns(result1 error) {
+	fake.SyncBlobsStub = nil
+	fake.syncBlobsReturns = struct {
 		result1 error
 	}{result1}
 }
@@ -146,8 +149,9 @@ func (fake *FakeBlobsDir) UploadBlobs() error {
 	fake.uploadBlobsMutex.Unlock()
 	if fake.UploadBlobsStub != nil {
 		return fake.UploadBlobsStub()
+	} else {
+		return fake.uploadBlobsReturns.result1
 	}
-	return fake.uploadBlobsReturns.result1
 }
 
 func (fake *FakeBlobsDir) UploadBlobsCallCount() int {
@@ -173,8 +177,9 @@ func (fake *FakeBlobsDir) TrackBlob(arg1 string, arg2 io.ReadCloser) (releasedir
 	fake.trackBlobMutex.Unlock()
 	if fake.TrackBlobStub != nil {
 		return fake.TrackBlobStub(arg1, arg2)
+	} else {
+		return fake.trackBlobReturns.result1, fake.trackBlobReturns.result2
 	}
-	return fake.trackBlobReturns.result1, fake.trackBlobReturns.result2
 }
 
 func (fake *FakeBlobsDir) TrackBlobCallCount() int {
@@ -206,8 +211,9 @@ func (fake *FakeBlobsDir) UntrackBlob(arg1 string) error {
 	fake.untrackBlobMutex.Unlock()
 	if fake.UntrackBlobStub != nil {
 		return fake.UntrackBlobStub(arg1)
+	} else {
+		return fake.untrackBlobReturns.result1
 	}
-	return fake.untrackBlobReturns.result1
 }
 
 func (fake *FakeBlobsDir) UntrackBlobCallCount() int {
@@ -236,8 +242,8 @@ func (fake *FakeBlobsDir) Invocations() map[string][][]interface{} {
 	defer fake.initMutex.RUnlock()
 	fake.blobsMutex.RLock()
 	defer fake.blobsMutex.RUnlock()
-	fake.downloadBlobsMutex.RLock()
-	defer fake.downloadBlobsMutex.RUnlock()
+	fake.syncBlobsMutex.RLock()
+	defer fake.syncBlobsMutex.RUnlock()
 	fake.uploadBlobsMutex.RLock()
 	defer fake.uploadBlobsMutex.RUnlock()
 	fake.trackBlobMutex.RLock()

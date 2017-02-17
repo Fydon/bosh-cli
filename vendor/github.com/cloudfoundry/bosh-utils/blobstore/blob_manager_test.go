@@ -89,7 +89,7 @@ var _ = Describe("Blob Manager", func() {
 			err := blobManager.Write(blobId, toWrite)
 			fileStats, err := fs_.FindFileStats(blobPath)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(fileStats.FileMode).To(Equal(os.FileMode(0666)))
+			Expect(fileStats.FileMode).To(Equal(os.FileMode(0600)))
 			Expect(fileStats.Flags).To(Equal(os.O_WRONLY | os.O_CREATE | os.O_TRUNC))
 		})
 	})
@@ -99,7 +99,7 @@ var _ = Describe("Blob Manager", func() {
 
 		BeforeEach(func() {
 			blobId = "smurf-24"
-			correctCheckSum :="f2b1b7be7897082d082773a1d1db5a01e8d21f5c"
+			correctCheckSum := "f2b1b7be7897082d082773a1d1db5a01e8d21f5c"
 			sampleDigest = boshcrypto.NewDigest(boshcrypto.DigestAlgorithmSHA1, correctCheckSum)
 		})
 

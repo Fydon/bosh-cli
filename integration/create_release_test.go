@@ -5,12 +5,14 @@ import (
 	"regexp"
 	"strings"
 
-	boshlog "github.com/cloudfoundry/bosh-utils/logger"
-	boshsys "github.com/cloudfoundry/bosh-utils/system"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
 	. "github.com/cloudfoundry/bosh-cli/cmd"
+
+	boshlog "github.com/cloudfoundry/bosh-utils/logger"
+	boshsys "github.com/cloudfoundry/bosh-utils/system"
+
 	boshrel "github.com/cloudfoundry/bosh-cli/release"
 	boshrelman "github.com/cloudfoundry/bosh-cli/release/manifest"
 	boshui "github.com/cloudfoundry/bosh-cli/ui"
@@ -230,6 +232,16 @@ license:
 			pkg1 := release.Packages()[0]
 			Expect(fs.ReadFileString(filepath.Join(pkg1.ExtractedPath(), "in-src"))).To(Equal("in-src"))
 			Expect(fs.ReadFileString(filepath.Join(pkg1.ExtractedPath(), "in-blobs"))).To(Equal("in-blobs"))
+		}
+
+		{ // removes unknown blobs, keeping known blobs
+			blobPath := filepath.Join(tmpDir, "blobs", "unknown-blob.tgz")
+
+			fs.WriteFileString(blobPath, "i don't belong here")
+
+			execCmd([]string{"create-release", "--dir", tmpDir})
+			Expect(fs.FileExists(blobPath)).To(BeFalse())
+			Expect(fs.FileExists(filepath.Join(tmpDir, "blobs", "in-blobs"))).To(BeTrue())
 		}
 	})
 })

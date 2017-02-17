@@ -55,6 +55,13 @@ type FakeDeployment struct {
 		result1 director.ExportReleaseResult
 		result2 error
 	}
+	TeamsStub        func() ([]string, error)
+	teamsMutex       sync.RWMutex
+	teamsArgsForCall []struct{}
+	teamsReturns     struct {
+		result1 []string
+		result2 error
+	}
 	StemcellsStub        func() ([]director.Stemcell, error)
 	stemcellsMutex       sync.RWMutex
 	stemcellsArgsForCall []struct{}
@@ -448,6 +455,31 @@ func (fake *FakeDeployment) ExportReleaseReturns(result1 director.ExportReleaseR
 	fake.ExportReleaseStub = nil
 	fake.exportReleaseReturns = struct {
 		result1 director.ExportReleaseResult
+		result2 error
+	}{result1, result2}
+}
+
+func (fake *FakeDeployment) Teams() ([]string, error) {
+	fake.teamsMutex.Lock()
+	fake.teamsArgsForCall = append(fake.teamsArgsForCall, struct{}{})
+	fake.recordInvocation("Teams", []interface{}{})
+	fake.teamsMutex.Unlock()
+	if fake.TeamsStub != nil {
+		return fake.TeamsStub()
+	}
+	return fake.teamsReturns.result1, fake.teamsReturns.result2
+}
+
+func (fake *FakeDeployment) TeamsCallCount() int {
+	fake.teamsMutex.RLock()
+	defer fake.teamsMutex.RUnlock()
+	return len(fake.teamsArgsForCall)
+}
+
+func (fake *FakeDeployment) TeamsReturns(result1 []string, result2 error) {
+	fake.TeamsStub = nil
+	fake.teamsReturns = struct {
+		result1 []string
 		result2 error
 	}{result1, result2}
 }
@@ -1291,6 +1323,8 @@ func (fake *FakeDeployment) Invocations() map[string][][]interface{} {
 	defer fake.releasesMutex.RUnlock()
 	fake.exportReleaseMutex.RLock()
 	defer fake.exportReleaseMutex.RUnlock()
+	fake.teamsMutex.RLock()
+	defer fake.teamsMutex.RUnlock()
 	fake.stemcellsMutex.RLock()
 	defer fake.stemcellsMutex.RUnlock()
 	fake.vMInfosMutex.RLock()
