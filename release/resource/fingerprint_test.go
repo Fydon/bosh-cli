@@ -3,6 +3,7 @@ package resource_test
 import (
 	"errors"
 	"os"
+	"path/filepath"
 	"strings"
 
 	fakesys "github.com/cloudfoundry/bosh-utils/system/fakes"
@@ -18,12 +19,16 @@ var _ = Describe("FingerprinterImpl", func() {
 		digestCalculator *fakecrypto.FakeDigestCalculator
 		fs               *fakesys.FakeFileSystem
 		fingerprinter    FingerprinterImpl
+		followSymlinks   bool
 	)
 
 	BeforeEach(func() {
 		digestCalculator = fakecrypto.NewFakeDigestCalculator()
 		fs = fakesys.NewFakeFileSystem()
-		fingerprinter = NewFingerprinterImpl(digestCalculator, fs)
+	})
+
+	JustBeforeEach(func() {
+		fingerprinter = NewFingerprinterImpl(digestCalculator, fs, followSymlinks)
 	})
 
 	Context("successfully creating a fingerprint", func() {
@@ -34,54 +39,54 @@ var _ = Describe("FingerprinterImpl", func() {
 
 		BeforeEach(func() {
 			files = []File{
-				NewFile("/tmp/file2", "/tmp"),
-				NewFile("/tmp/file1", "/tmp"),
-				NewFile("/tmp/file3", "/tmp"),
-				NewFile("/tmp/rel/file4", "/tmp"),
+				NewFile(filepath.Join("/", "tmp", "file2"), filepath.Join("/", "tmp")),
+				NewFile(filepath.Join("/", "tmp", "file1"), filepath.Join("/", "tmp")),
+				NewFile(filepath.Join("/", "tmp", "file3"), filepath.Join("/", "tmp")),
+				NewFile(filepath.Join("/", "tmp", "rel", "file4"), filepath.Join("/", "tmp")),
 			}
 
-			excludeModeFile := NewFile("/tmp/file5", "/tmp")
+			excludeModeFile := NewFile(filepath.Join("/", "tmp", "file5"), filepath.Join("/", "tmp"))
 			excludeModeFile.ExcludeMode = true
 			files = append(files, excludeModeFile)
 
-			basenameFile := NewFile("/tmp/rel/file6", "/tmp")
+			basenameFile := NewFile(filepath.Join("/", "tmp", "rel", "file6"), filepath.Join("/", "tmp"))
 			basenameFile.UseBasename = true
 			files = append(files, basenameFile)
 
-			fs.RegisterOpenFile("/tmp/file1", &fakesys.FakeFile{
+			fs.RegisterOpenFile(filepath.Join("/", "tmp", "file1"), &fakesys.FakeFile{
 				Stats: &fakesys.FakeFileStats{FileType: fakesys.FakeFileTypeDir},
 			})
 
-			fs.RegisterOpenFile("/tmp/file2", &fakesys.FakeFile{
+			fs.RegisterOpenFile(filepath.Join("/", "tmp", "file2"), &fakesys.FakeFile{
 				Stats: &fakesys.FakeFileStats{FileType: fakesys.FakeFileTypeFile},
 			})
 
-			fs.RegisterOpenFile("/tmp/file3", &fakesys.FakeFile{
+			fs.RegisterOpenFile(filepath.Join("/", "tmp", "file3"), &fakesys.FakeFile{
 				Stats: &fakesys.FakeFileStats{
 					FileType: fakesys.FakeFileTypeFile,
 					FileMode: os.FileMode(0111),
 				},
 			})
 
-			fs.RegisterOpenFile("/tmp/rel/file4", &fakesys.FakeFile{
+			fs.RegisterOpenFile(filepath.Join("/", "tmp", "rel", "file4"), &fakesys.FakeFile{
 				Stats: &fakesys.FakeFileStats{FileType: fakesys.FakeFileTypeFile},
 			})
 
-			fs.RegisterOpenFile("/tmp/file5", &fakesys.FakeFile{
+			fs.RegisterOpenFile(filepath.Join("/", "tmp", "file5"), &fakesys.FakeFile{
 				Stats: &fakesys.FakeFileStats{FileType: fakesys.FakeFileTypeFile},
 			})
 
-			fs.RegisterOpenFile("/tmp/rel/file6", &fakesys.FakeFile{
+			fs.RegisterOpenFile(filepath.Join("/", "tmp", "rel", "file6"), &fakesys.FakeFile{
 				Stats: &fakesys.FakeFileStats{FileType: fakesys.FakeFileTypeFile},
 			})
 
 			digestCalculator.SetCalculateBehavior(map[string]fakecrypto.CalculateInput{
 				// file1 directory is not sha1-ed
-				"/tmp/file2":     fakecrypto.CalculateInput{DigestStr: "file2-sha1"},
-				"/tmp/file3":     fakecrypto.CalculateInput{DigestStr: "file3-sha1"},
-				"/tmp/rel/file4": fakecrypto.CalculateInput{DigestStr: "file4-sha1"},
-				"/tmp/file5":     fakecrypto.CalculateInput{DigestStr: "file5-sha1"},
-				"/tmp/rel/file6": fakecrypto.CalculateInput{DigestStr: "file6-sha1"},
+				filepath.Join("/", "tmp", "file2"):        fakecrypto.CalculateInput{DigestStr: "file2-sha1"},
+				filepath.Join("/", "tmp", "file3"):        fakecrypto.CalculateInput{DigestStr: "file3-sha1"},
+				filepath.Join("/", "tmp", "rel", "file4"): fakecrypto.CalculateInput{DigestStr: "file4-sha1"},
+				filepath.Join("/", "tmp", "file5"):        fakecrypto.CalculateInput{DigestStr: "file5-sha1"},
+				filepath.Join("/", "tmp", "rel", "file6"): fakecrypto.CalculateInput{DigestStr: "file6-sha1"},
 			})
 
 			chunks = []string{
@@ -118,8 +123,8 @@ var _ = Describe("FingerprinterImpl", func() {
 	})
 
 	It("returns an error when the resulting checksum contains unexpected content so it does not pass incompatible fingerprints to director", func() {
-		files := []File{NewFile("/tmp/file", "/tmp")}
-		fs.WriteFileString("/tmp/file", "stuff")
+		files := []File{NewFile(filepath.Join("/", "tmp", "file"), filepath.Join("/", "tmp"))}
+		fs.WriteFileString(filepath.Join("/", "tmp", "file"), "stuff")
 
 		digestCalculator.CalculateStringInputs = map[string]string{
 			strings.Join([]string{"v2", "file", "100644"}, ""): "whatTheAlgorithmIsThat!:asdfasdfasdfasdf",
@@ -131,56 +136,97 @@ var _ = Describe("FingerprinterImpl", func() {
 		Expect(err.Error()).To(ContainSubstring("Generated fingerprint contains unexpected characters 'whatTheAlgorithmIsThat!:asdfasdfasdfasdf'"))
 	})
 
-	It("Includes symlink target in fingerprint calculation", func() {
-		files := []File{
-			NewFile("/tmp/regular", "/tmp"),
-			NewFile("/tmp/symlink", "/tmp"),
-		}
-
-		fs.WriteFileString("/tmp/regular", "")
-		fs.Symlink("nothing", "/tmp/symlink")
-
-		digestCalculator.SetCalculateBehavior(map[string]fakecrypto.CalculateInput{
-			"/tmp/regular": fakecrypto.CalculateInput{DigestStr: "regular-sha1"},
+	Context("when following symlinks", func() {
+		BeforeEach(func() {
+			followSymlinks = true
 		})
 
-		chunks := []string{
-			"v2", // version
-			"regular", "regular-sha1", "100644",
-			"symlink", "symlink-target-sha1", "symlink",
-			"chunk1", ",chunk2", // sorted chunks
-		}
+		It("Includes symlink target in fingerprint calculation", func() {
+			files := []File{
+				NewFile(filepath.Join("/", "tmp", "regular"), filepath.Join("/", "tmp")),
+				NewFile(filepath.Join("/", "tmp", "symlink"), filepath.Join("/", "tmp")),
+			}
 
-		digestCalculator.CalculateStringInputs = map[string]string{
-			"nothing":                "symlink-target-sha1",
-			strings.Join(chunks, ""): "fp",
-		}
+			fs.WriteFileString(filepath.Join("/", "tmp", "regular"), "")
+			fs.Symlink(filepath.Join("/", "tmp", "regular"), filepath.Join("/", "tmp", "symlink"))
 
-		fp, err := fingerprinter.Calculate(files, []string{"chunk2", "chunk1"})
-		Expect(err).ToNot(HaveOccurred())
-		Expect(fp).To(Equal("fp"))
+			digestCalculator.SetCalculateBehavior(map[string]fakecrypto.CalculateInput{
+				filepath.Join("/", "tmp", "regular"): fakecrypto.CalculateInput{DigestStr: "regular-sha1"},
+			})
+
+			chunks := []string{
+				"v2", // version
+				"regular", "regular-sha1", "100644",
+				"symlink", "regular-sha1", "100644",
+				"chunk1", ",chunk2", // sorted chunks
+			}
+
+			digestCalculator.CalculateStringInputs = map[string]string{
+				strings.Join(chunks, ""): "fp",
+			}
+
+			fp, err := fingerprinter.Calculate(files, []string{"chunk2", "chunk1"})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(fp).To(Equal("fp"))
+		})
+	})
+
+	Context("when not following symlinks", func() {
+		BeforeEach(func() {
+			followSymlinks = false
+		})
+
+		It("Includes symlink target in fingerprint calculation", func() {
+			files := []File{
+				NewFile(filepath.Join("/", "tmp", "regular"), filepath.Join("/", "tmp")),
+				NewFile(filepath.Join("/", "tmp", "symlink"), filepath.Join("/", "tmp")),
+			}
+
+			fs.WriteFileString(filepath.Join("/", "tmp", "regular"), "")
+			fs.Symlink("nothing", filepath.Join("/", "tmp", "symlink"))
+
+			digestCalculator.SetCalculateBehavior(map[string]fakecrypto.CalculateInput{
+				filepath.Join("/", "tmp", "regular"): fakecrypto.CalculateInput{DigestStr: "regular-sha1"},
+			})
+
+			chunks := []string{
+				"v2", // version
+				"regular", "regular-sha1", "100644",
+				"symlink", "symlink-target-sha1", "symlink",
+				"chunk1", ",chunk2", // sorted chunks
+			}
+
+			digestCalculator.CalculateStringInputs = map[string]string{
+				"nothing":                "symlink-target-sha1",
+				strings.Join(chunks, ""): "fp",
+			}
+
+			fp, err := fingerprinter.Calculate(files, []string{"chunk2", "chunk1"})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(fp).To(Equal("fp"))
+		})
 	})
 
 	It("returns error if stating file fails", func() {
-		fs.RegisterOpenFile("/tmp/file2", &fakesys.FakeFile{
+		fs.RegisterOpenFile(filepath.Join("/", "tmp", "file2"), &fakesys.FakeFile{
 			StatErr: errors.New("fake-err"),
 		})
 
-		_, err := fingerprinter.Calculate([]File{NewFile("/tmp/file2", "/tmp")}, nil)
+		_, err := fingerprinter.Calculate([]File{NewFile(filepath.Join("/", "tmp", "file2"), filepath.Join("/", "tmp"))}, nil)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("fake-err"))
 	})
 
 	It("returns error if calculating file sha1 fails", func() {
-		fs.RegisterOpenFile("/tmp/file2", &fakesys.FakeFile{
+		fs.RegisterOpenFile(filepath.Join("/", "tmp", "file2"), &fakesys.FakeFile{
 			Stats: &fakesys.FakeFileStats{FileType: fakesys.FakeFileTypeFile},
 		})
 
 		digestCalculator.SetCalculateBehavior(map[string]fakecrypto.CalculateInput{
-			"/tmp/file2": fakecrypto.CalculateInput{Err: errors.New("fake-err")},
+			filepath.Join("/", "tmp", "file2"): fakecrypto.CalculateInput{Err: errors.New("fake-err")},
 		})
 
-		_, err := fingerprinter.Calculate([]File{NewFile("/tmp/file2", "/tmp")}, nil)
+		_, err := fingerprinter.Calculate([]File{NewFile(filepath.Join("/", "tmp", "file2"), filepath.Join("/", "tmp"))}, nil)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("fake-err"))
 	})

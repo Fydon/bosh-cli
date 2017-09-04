@@ -1,7 +1,7 @@
 package release
 
 import (
-	gopath "path"
+	"path/filepath"
 
 	boshcmd "github.com/cloudfoundry/bosh-utils/fileutil"
 	boshlog "github.com/cloudfoundry/bosh-utils/logger"
@@ -15,7 +15,7 @@ import (
 )
 
 type Provider struct {
-	fingerprinter Fingerprinter
+	fingerprinterFactory func(bool) Fingerprinter
 
 	cmdRunner        boshsys.CmdRunner
 	compressor       boshcmd.Compressor
@@ -31,10 +31,10 @@ func NewProvider(
 	fs boshsys.FileSystem,
 	logger boshlog.Logger,
 ) Provider {
-	fingerprinter := NewFingerprinterImpl(digestCalculator, fs)
-
 	return Provider{
-		fingerprinter:    fingerprinter,
+		fingerprinterFactory: func(followSymlinks bool) Fingerprinter {
+			return NewFingerprinterImpl(digestCalculator, fs, followSymlinks)
+		},
 		cmdRunner:        cmdRunner,
 		compressor:       compressor,
 		digestCalculator: digestCalculator,
@@ -62,13 +62,13 @@ func (p Provider) archiveReader(extracting bool) ArchiveReader {
 }
 
 func (p Provider) NewDirReader(dirPath string) DirReader {
-	archiveFactory := func(files []File, prepFiles []File, chunks []string) Archive {
+	archiveFactory := func(args ArchiveFactoryArgs) Archive {
 		return NewArchiveImpl(
-			files, prepFiles, chunks, dirPath, p.fingerprinter, p.compressor, p.digestCalculator, p.cmdRunner, p.fs)
+			args, dirPath, p.fingerprinterFactory(args.FollowSymlinks), p.compressor, p.digestCalculator, p.cmdRunner, p.fs)
 	}
 
-	srcDirPath := gopath.Join(dirPath, "src")
-	blobsDirPath := gopath.Join(dirPath, "blobs")
+	srcDirPath := filepath.Join(dirPath, "src")
+	blobsDirPath := filepath.Join(dirPath, "blobs")
 
 	jobDirReader := boshjob.NewDirReaderImpl(archiveFactory, p.fs)
 	pkgDirReader := boshpkg.NewDirReaderImpl(archiveFactory, srcDirPath, blobsDirPath, p.fs)

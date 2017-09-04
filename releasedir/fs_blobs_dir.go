@@ -10,12 +10,11 @@ import (
 	"gopkg.in/yaml.v2"
 	"io"
 	"os"
-	gopath "path"
+	"path/filepath"
 	"sort"
 
 	"fmt"
 	bicrypto "github.com/cloudfoundry/bosh-cli/crypto"
-	"path/filepath"
 )
 
 type FSBlobsDir struct {
@@ -57,8 +56,8 @@ func NewFSBlobsDir(
 	logger boshlog.Logger,
 ) FSBlobsDir {
 	return FSBlobsDir{
-		indexPath: gopath.Join(dirPath, "config", "blobs.yml"),
-		dirPath:   gopath.Join(dirPath, "blobs"),
+		indexPath: filepath.Join(dirPath, "config", "blobs.yml"),
+		dirPath:   filepath.Join(dirPath, "blobs"),
 
 		reporter:         reporter,
 		blobstore:        blobstore,
@@ -71,7 +70,7 @@ func NewFSBlobsDir(
 }
 
 func (d FSBlobsDir) Init() error {
-	err := d.fs.MkdirAll(gopath.Dir(d.indexPath), os.ModePerm)
+	err := d.fs.MkdirAll(filepath.Dir(d.indexPath), os.ModePerm)
 	if err != nil {
 		return bosherr.WrapErrorf(err, "Creating blobs/")
 	}
@@ -117,6 +116,15 @@ func (d FSBlobsDir) SyncBlobs(numOfParallelWorkers int) error {
 	blobs, err := d.Blobs()
 	if err != nil {
 		return err
+	}
+
+	symlinksFound, err := d.containsSymlinks()
+	if err != nil {
+		return bosherr.WrapErrorf(err, "Syncing blobs")
+	}
+
+	if symlinksFound {
+		return bosherr.Error("Bailing because symlinks found in blobs directory. If switching from CLI v1, please use the `reset-release` command.")
 	}
 
 	if err := d.removeUnknownBlobs(blobs); err != nil {
@@ -245,7 +253,9 @@ func (d FSBlobsDir) TrackBlob(path string, src io.ReadCloser) (Blob, error) {
 
 	blobs[idx] = Blob{Path: path, Size: fileInfo.Size(), SHA1: sha1}
 
-	err = d.moveBlobLocally(tempFile.Name(), gopath.Join(d.dirPath, path))
+	tempFile.Close()
+
+	err = d.moveBlobLocally(tempFile.Name(), filepath.Join(d.dirPath, path))
 	if err != nil {
 		return Blob{}, err
 	}
@@ -259,7 +269,7 @@ func (d FSBlobsDir) UntrackBlob(path string) error {
 		return err
 	}
 
-	err = d.fs.RemoveAll(gopath.Join(d.dirPath, path))
+	err = d.fs.RemoveAll(filepath.Join(d.dirPath, path))
 	if err != nil {
 		return bosherr.WrapErrorf(err, "Removing blob from blobs/")
 	}
@@ -301,6 +311,26 @@ func (d FSBlobsDir) UploadBlobs() error {
 	return nil
 }
 
+func (d FSBlobsDir) containsSymlinks() (bool, error) {
+	files, err := d.fs.RecursiveGlob(filepath.Join(d.dirPath, "**/*"))
+	if err != nil {
+		return false, nil
+	}
+
+	for _, file := range files {
+		fileInfo, err := d.fs.Lstat(file)
+		if err != nil {
+			return false, err
+		}
+
+		if fileInfo.Mode()&os.ModeSymlink != 0 {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
 func (d FSBlobsDir) checkBlobExistence(dstPath string, digest boshcrypto.MultipleDigest) bool {
 	if d.fs.FileExists(dstPath) {
 		if err := digest.VerifyFilePath(dstPath, d.fs); err != nil {
@@ -315,7 +345,7 @@ func (d FSBlobsDir) checkBlobExistence(dstPath string, digest boshcrypto.Multipl
 }
 
 func (d FSBlobsDir) downloadBlob(blob Blob) error {
-	dstPath := gopath.Join(d.dirPath, blob.Path)
+	dstPath := filepath.Join(d.dirPath, blob.Path)
 
 	digest, err := boshcrypto.ParseMultipleDigest(blob.SHA1)
 	if err != nil {
@@ -346,7 +376,7 @@ func (d FSBlobsDir) uploadBlob(blob Blob) (string, error) {
 
 	d.reporter.BlobUploadStarted(blob.Path, blob.Size, blob.SHA1)
 
-	srcPath := gopath.Join(d.dirPath, blob.Path)
+	srcPath := filepath.Join(d.dirPath, blob.Path)
 
 	blobID, _, err := d.blobstore.Create(srcPath)
 	if err != nil {
@@ -360,7 +390,7 @@ func (d FSBlobsDir) uploadBlob(blob Blob) (string, error) {
 }
 
 func (d FSBlobsDir) moveBlobLocally(srcPath, dstPath string) error {
-	err := d.fs.MkdirAll(gopath.Dir(dstPath), os.ModePerm)
+	err := d.fs.MkdirAll(filepath.Dir(dstPath), os.ModePerm)
 	if err != nil {
 		return bosherr.WrapErrorf(err, "Creating subdirs in blobs/")
 	}

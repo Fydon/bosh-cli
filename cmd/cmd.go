@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"path/filepath"
 
 	"github.com/cppforlife/go-patch/patch"
 
@@ -12,9 +13,11 @@ import (
 	boshrel "github.com/cloudfoundry/bosh-cli/release"
 	boshreldir "github.com/cloudfoundry/bosh-cli/releasedir"
 	boshssh "github.com/cloudfoundry/bosh-cli/ssh"
+	bistemcell "github.com/cloudfoundry/bosh-cli/stemcell"
 	boshui "github.com/cloudfoundry/bosh-cli/ui"
 	boshuit "github.com/cloudfoundry/bosh-cli/ui/task"
 
+	boshtbl "github.com/cloudfoundry/bosh-cli/ui/table"
 	boshcrypto "github.com/cloudfoundry/bosh-utils/crypto"
 	boshfu "github.com/cloudfoundry/bosh-utils/fileutil"
 )
@@ -171,6 +174,12 @@ func (c Cmd) Execute() (cmdErr error) {
 	case *DeleteStemcellOpts:
 		return NewDeleteStemcellCmd(deps.UI, c.director()).Run(*opts)
 
+	case *RepackStemcellOpts:
+		stemcellReader := bistemcell.NewReader(deps.Compressor, deps.FS)
+		stemcellExtractor := bistemcell.NewExtractor(stemcellReader, deps.FS)
+
+		return NewRepackStemcellCmd(deps.UI, deps.FS, stemcellExtractor).Run(*opts)
+
 	case *LocksOpts:
 		return NewLocksCmd(deps.UI, c.director()).Run()
 
@@ -190,6 +199,9 @@ func (c Cmd) Execute() (cmdErr error) {
 
 	case *DeleteDiskOpts:
 		return NewDeleteDiskCmd(deps.UI, c.director()).Run(*opts)
+
+	case *OrphanDiskOpts:
+		return NewOrphanDiskCmd(deps.UI, c.director()).Run(*opts)
 
 	case *SnapshotsOpts:
 		return NewSnapshotsCmd(deps.UI, c.deployment()).Run(*opts)
@@ -222,11 +234,12 @@ func (c Cmd) Execute() (cmdErr error) {
 		return NewUpdateCPIConfigCmd(deps.UI, c.director()).Run(*opts)
 
 	case *RuntimeConfigOpts:
-		return NewRuntimeConfigCmd(deps.UI, c.director()).Run()
+		return NewRuntimeConfigCmd(deps.UI, c.director()).Run(*opts)
 
 	case *UpdateRuntimeConfigOpts:
 		director := c.director()
-		releaseManager := c.releaseManager(director)
+		parallelUploads := opts.ParallelOpt
+		releaseManager := c.releaseManager(director, parallelUploads)
 		return NewUpdateRuntimeConfigCmd(deps.UI, director, releaseManager).Run(*opts)
 
 	case *ManifestOpts:
@@ -234,6 +247,9 @@ func (c Cmd) Execute() (cmdErr error) {
 
 	case *EventsOpts:
 		return NewEventsCmd(deps.UI, c.director()).Run(*opts)
+
+	case *EventOpts:
+		return NewEventCmd(deps.UI, c.director()).Run(*opts)
 
 	case *InspectReleaseOpts:
 		return NewInspectReleaseCmd(deps.UI, c.director()).Run(*opts)
@@ -255,7 +271,8 @@ func (c Cmd) Execute() (cmdErr error) {
 
 	case *DeployOpts:
 		director, deployment := c.directorAndDeployment()
-		releaseManager := c.releaseManager(director)
+		parallelUploads := opts.ParallelOpt
+		releaseManager := c.releaseManager(director, parallelUploads)
 		return NewDeployCmd(deps.UI, deployment, releaseManager).Run(*opts)
 
 	case *StartOpts:
@@ -330,10 +347,22 @@ func (c Cmd) Execute() (cmdErr error) {
 		_, err := NewCreateReleaseCmd(releaseDirFactory, relProv.NewArchiveWriter(), c.deps.FS, c.deps.UI).Run(*opts)
 		return err
 
+	case *Sha1ifyReleaseOpts:
+		relProv, _ := c.releaseProviders()
+
+		return NewRedigestReleaseCmd(
+			relProv.NewArchiveReader(),
+			relProv.NewArchiveWriter(),
+			crypto.NewDigestCalculator(c.deps.FS, []boshcrypto.Algorithm{boshcrypto.DigestAlgorithmSHA1}),
+			boshfu.NewFileMover(c.deps.FS),
+			c.deps.FS,
+			c.deps.UI,
+		).Run(opts.Args)
+
 	case *Sha2ifyReleaseOpts:
 		relProv, _ := c.releaseProviders()
 
-		return NewSha2ifyReleaseCmd(
+		return NewRedigestReleaseCmd(
 			relProv.NewArchiveReader(),
 			relProv.NewArchiveWriter(),
 			crypto.NewDigestCalculator(c.deps.FS, []boshcrypto.Algorithm{boshcrypto.DigestAlgorithmSHA256}),
@@ -358,7 +387,7 @@ func (c Cmd) Execute() (cmdErr error) {
 		return NewSyncBlobsCmd(c.blobsDir(opts.Directory), opts.ParallelOpt).Run()
 
 	case *MessageOpts:
-		deps.UI.PrintBlock(opts.Message)
+		deps.UI.PrintBlock([]byte(opts.Message))
 		return nil
 
 	case *VariablesOpts:
@@ -382,10 +411,19 @@ func (c Cmd) configureUI() {
 	if c.BoshOpts.NonInteractiveOpt {
 		c.deps.UI.EnableNonInteractive()
 	}
+
+	if len(c.BoshOpts.ColumnOpt) > 0 {
+		headers := []boshtbl.Header{}
+		for _, columnOpt := range c.BoshOpts.ColumnOpt {
+			headers = append(headers, columnOpt.Header)
+		}
+
+		c.deps.UI.ShowColumns(headers)
+	}
 }
 
 func (c Cmd) configureFS() {
-	tmpDirPath, err := c.deps.FS.ExpandPath("~/.bosh/tmp")
+	tmpDirPath, err := c.deps.FS.ExpandPath(filepath.Join("~", ".bosh", "tmp"))
 	c.panicIfErr(err)
 
 	err = c.deps.FS.ChangeTempRoot(tmpDirPath)
@@ -444,7 +482,7 @@ func (c Cmd) releaseProviders() (boshrel.Provider, boshreldir.Provider) {
 	return releaseProvider, releaseDirProvider
 }
 
-func (c Cmd) releaseManager(director boshdir.Director) ReleaseManager {
+func (c Cmd) releaseManager(director boshdir.Director, parallelUploads int) ReleaseManager {
 	relProv, relDirProv := c.releaseProviders()
 
 	releaseDirFactory := func(dir DirOrCWDArg) (boshrel.Reader, boshreldir.ReleaseDir) {
@@ -464,7 +502,7 @@ func (c Cmd) releaseManager(director boshdir.Director) ReleaseManager {
 	uploadReleaseCmd := NewUploadReleaseCmd(
 		releaseDirFactory, releaseWriter, director, releaseArchiveFactory, c.deps.CmdRunner, c.deps.FS, c.deps.UI)
 
-	return NewReleaseManager(createReleaseCmd, uploadReleaseCmd)
+	return NewReleaseManager(createReleaseCmd, uploadReleaseCmd, parallelUploads)
 }
 
 func (c Cmd) blobsDir(dir DirOrCWDArg) boshreldir.BlobsDir {

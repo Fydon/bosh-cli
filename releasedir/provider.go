@@ -1,14 +1,14 @@
 package releasedir
 
 import (
-	gopath "path"
+	"path/filepath"
 
+	"code.cloudfoundry.org/clock"
 	boshblob "github.com/cloudfoundry/bosh-utils/blobstore"
 	bosherr "github.com/cloudfoundry/bosh-utils/errors"
 	boshlog "github.com/cloudfoundry/bosh-utils/logger"
 	boshsys "github.com/cloudfoundry/bosh-utils/system"
 	boshuuid "github.com/cloudfoundry/bosh-utils/uuid"
-	"github.com/pivotal-golang/clock"
 
 	bicrypto "github.com/cloudfoundry/bosh-cli/crypto"
 	boshrel "github.com/cloudfoundry/bosh-cli/release"
@@ -64,10 +64,10 @@ func (p Provider) NewFSReleaseDir(dirPath string) FSReleaseDir {
 	blobsDir := p.NewFSBlobsDir(dirPath)
 	generator := NewFSGenerator(dirPath, p.fs)
 
-	devRelsPath := gopath.Join(dirPath, "dev_releases")
+	devRelsPath := filepath.Join(dirPath, "dev_releases")
 	devReleases := NewFSReleaseIndex("dev", devRelsPath, p.releaseIndexReporter, p.uuidGen, p.fs)
 
-	finalRelsPath := gopath.Join(dirPath, "releases")
+	finalRelsPath := filepath.Join(dirPath, "releases")
 	finalReleases := NewFSReleaseIndex("final", finalRelsPath, p.releaseIndexReporter, p.uuidGen, p.fs)
 
 	indiciesProvider := boshidx.NewProvider(p.indexReporter, p.newBlobstore(dirPath), p.fs)
@@ -103,6 +103,8 @@ func (p Provider) newBlobstore(dirPath string) boshblob.DigestBlobstore {
 		blobstore = boshblob.NewLocalBlobstore(p.fs, p.uuidGen, options)
 	case "s3":
 		blobstore = NewS3Blobstore(p.fs, p.uuidGen, options)
+	case "gcs":
+		blobstore = NewGCSBlobstore(p.fs, p.uuidGen, options)
 	default:
 		return NewErrBlobstore(bosherr.Error("Expected release blobstore to be configured"))
 	}
@@ -119,7 +121,7 @@ func (p Provider) newBlobstore(dirPath string) boshblob.DigestBlobstore {
 }
 
 func (p Provider) newConfig(dirPath string) FSConfig {
-	publicPath := gopath.Join(dirPath, "config", "final.yml")
-	privatePath := gopath.Join(dirPath, "config", "private.yml")
+	publicPath := filepath.Join(dirPath, "config", "final.yml")
+	privatePath := filepath.Join(dirPath, "config", "private.yml")
 	return NewFSConfig(publicPath, privatePath, p.fs)
 }
