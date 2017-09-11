@@ -15,7 +15,7 @@ func (p *execProcess) Start() error {
 		p.cmd.Stderr = p.stderrWriter
 	}
 	cmdString := strings.Join(p.cmd.Args, " ")
-	p.logger.Debug(execProcessLogTag, "Running command: %s", cmdString)
+	p.logger.Debug(execProcessLogTag, "Running command: %s %#v", cmdString, p.cmd.Env)
 
 	err := p.cmd.Start()
 	if err != nil {

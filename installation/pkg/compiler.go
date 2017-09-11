@@ -1,8 +1,13 @@
 package pkg
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
+	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/cloudfoundry/bosh-cli/installation/blobextract"
 	birelpkg "github.com/cloudfoundry/bosh-cli/release/pkg"
@@ -92,23 +97,43 @@ func (c *compiler) Compile(pkg birelpkg.Compilable) (bistatepkg.CompiledPackageR
 		return record, isCompiledPackage, bosherr.Errorf("Packaging script for package '%s' not found", pkg.Name())
 	}
 
-	cmd := boshsys.Command{
-		Name: "bash",
-		Args: []string{"-x", "packaging"},
-		Env: map[string]string{
-			"BOSH_COMPILE_TARGET": packageSrcDir,
-			"BOSH_INSTALL_TARGET": installDir,
-			"BOSH_PACKAGE_NAME":   pkg.Name(),
-			"BOSH_PACKAGES_DIR":   c.packagesDir,
-			"PATH":                "/usr/local/bin:/usr/bin:/bin",
-		},
-		UseIsolatedEnv: true,
-		WorkingDir:     packageSrcDir,
+	var cmd boshsys.Command
+	if runtime.GOOS == "windows" {
+		workingDir, _ := os.Getwd()
+		workingDir = strings.Replace(workingDir, ":", "", -1)
+		decodedRune, n := utf8.DecodeRuneInString(workingDir)
+		workingDir = "/mnt/" + filepath.ToSlash(string(unicode.ToLower(decodedRune)) + workingDir[n:]) + "/"
+		cmd = boshsys.Command{
+			Name: "bash",
+			Args: []string{"-c", "\"export BOSH_COMPILE_TARGET='" + workingDir + filepath.ToSlash(packageSrcDir) + "';" +
+				" export BOSH_INSTALL_TARGET='" + workingDir + filepath.ToSlash(installDir) + "';" +
+				" export BOSH_PACKAGE_NAME='" + pkg.Name() + "';" +
+				" export BOSH_PACKAGES_DIR='" + workingDir + filepath.ToSlash(c.packagesDir) + "';" +
+				" export PATH='/usr/local/bin:/usr/bin:/bin';" +
+				" bash -x packaging\""
+			},
+			UseIsolatedEnv: runtime.GOOS != "windows",
+			WorkingDir:     packageSrcDir,
+		}
+	} else {
+		cmd = boshsys.Command{
+			Name: "bash",
+			Args: []string{"-x", "packaging"},
+			Env: map[string]string{
+				"BOSH_COMPILE_TARGET": packageSrcDir,
+				"BOSH_INSTALL_TARGET": installDir,
+				"BOSH_PACKAGE_NAME":   pkg.Name(),
+				"BOSH_PACKAGES_DIR":   c.packagesDir,
+				"PATH":                "/usr/local/bin:/usr/bin:/bin",
+			},
+			UseIsolatedEnv: runtime.GOOS != "windows",
+			WorkingDir:     packageSrcDir,
+		}
 	}
 
 	_, _, _, err = c.runner.RunComplexCommand(cmd)
 	if err != nil {
-		return record, isCompiledPackage, bosherr.WrapError(err, "Compiling package")
+		return record, isCompiledPackage, bosherr.WrapError(err, fmt.Sprintf("Compiling package %#v", cmd.Env))
 	}
 
 	tarball, err := c.compressor.CompressFilesInDir(installDir)

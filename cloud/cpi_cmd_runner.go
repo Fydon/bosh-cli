@@ -4,6 +4,11 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"os"
+	"runtime"
+	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	bosherr "github.com/cloudfoundry/bosh-utils/errors"
 	boshlog "github.com/cloudfoundry/bosh-utils/logger"
@@ -84,15 +89,34 @@ func (r *cpiCmdRunner) Run(context CmdContext, method string, args ...interface{
 	}
 
 	cmdPath := r.cpi.ExecutablePath()
-	cmd := boshsys.Command{
-		Name: cmdPath,
-		Env: map[string]string{
-			"BOSH_PACKAGES_DIR": r.cpi.PackagesDir,
-			"BOSH_JOBS_DIR":     r.cpi.JobsDir,
-			"PATH":              "/usr/local/bin:/usr/bin:/bin:/sbin",
-		},
-		UseIsolatedEnv: true,
-		Stdin:          bytes.NewReader(inputBytes),
+	var boshPackagesDir string
+	var boshJobsDir string
+	if runtime.GOOS == "windows" {
+		workingDir, _ := os.Getwd()
+		workingDir = strings.Replace(workingDir, ":", "", -1)
+		decodedRune, n := utf8.DecodeRuneInString(workingDir)
+		workingDir = "/mnt/" + filepath.ToSlash(string(unicode.ToLower(decodedRune)) + workingDir[n:]) + "/"
+		cmd := boshsys.Command{
+			Name: cmdPath,
+			Args: []string{"-c", "\"export BOSH_COMPILE_TARGET='" + workingDir + filepath.ToSlash(packageSrcDir) + "';" +
+				" export BOSH_PACKAGES_DIR='" + workingDir + filepath.ToSlash(r.cpi.PackagesDir) + "';" +
+				" export BOSH_JOBS_DIR='" + workingDir + filepath.ToSlash(r.cpi.JobsDir) + "';" +
+				" export PATH='/usr/local/bin:/usr/bin:/bin:/sbin';"
+			},
+			UseIsolatedEnv: runtime.GOOS != "windows",
+			Stdin:          bytes.NewReader(inputBytes),
+		}
+	} else {
+		cmd := boshsys.Command{
+			Name: cmdPath,
+			Env: map[string]string{
+				"BOSH_PACKAGES_DIR": r.cpi.PackagesDir,
+				"BOSH_JOBS_DIR":     r.cpi.JobsDir,
+				"PATH":              "/usr/local/bin:/usr/bin:/bin:/sbin",
+			},
+			UseIsolatedEnv: runtime.GOOS != "windows",
+			Stdin:          bytes.NewReader(inputBytes),
+		}
 	}
 	stdout, stderr, exitCode, err := r.cmdRunner.RunComplexCommand(cmd)
 	r.logger.Debug(r.logTag, "Exit Code %d when executing external CPI command '%s'\nSTDIN: '%s'\nSTDOUT: '%s'\nSTDERR: '%s'", exitCode, cmdPath, string(inputBytes), stdout, stderr)
