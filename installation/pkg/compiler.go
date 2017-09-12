@@ -110,7 +110,7 @@ func (c *compiler) Compile(pkg birelpkg.Compilable) (bistatepkg.CompiledPackageR
 				" export BOSH_PACKAGE_NAME='" + pkg.Name() + "';" +
 				" export BOSH_PACKAGES_DIR='" + workingDir + filepath.ToSlash(c.packagesDir) + "';" +
 				" export PATH='/usr/local/bin:/usr/bin:/bin';" +
-				" bash -x packaging\""
+				" bash -x packaging\"",
 			},
 			UseIsolatedEnv: runtime.GOOS != "windows",
 			WorkingDir:     packageSrcDir,

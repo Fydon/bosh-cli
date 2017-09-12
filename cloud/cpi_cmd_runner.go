@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"unicode"
@@ -89,25 +90,23 @@ func (r *cpiCmdRunner) Run(context CmdContext, method string, args ...interface{
 	}
 
 	cmdPath := r.cpi.ExecutablePath()
-	var boshPackagesDir string
-	var boshJobsDir string
+	var cmd boshsys.Command
 	if runtime.GOOS == "windows" {
 		workingDir, _ := os.Getwd()
 		workingDir = strings.Replace(workingDir, ":", "", -1)
 		decodedRune, n := utf8.DecodeRuneInString(workingDir)
 		workingDir = "/mnt/" + filepath.ToSlash(string(unicode.ToLower(decodedRune)) + workingDir[n:]) + "/"
-		cmd := boshsys.Command{
-			Name: cmdPath,
-			Args: []string{"-c", "\"export BOSH_COMPILE_TARGET='" + workingDir + filepath.ToSlash(packageSrcDir) + "';" +
-				" export BOSH_PACKAGES_DIR='" + workingDir + filepath.ToSlash(r.cpi.PackagesDir) + "';" +
+		cmd = boshsys.Command{
+			Name: "bash",
+			Args: []string{"-c", "\"export BOSH_PACKAGES_DIR='" + workingDir + filepath.ToSlash(r.cpi.PackagesDir) + "';" +
 				" export BOSH_JOBS_DIR='" + workingDir + filepath.ToSlash(r.cpi.JobsDir) + "';" +
-				" export PATH='/usr/local/bin:/usr/bin:/bin:/sbin';"
+				" export PATH='/usr/local/bin:/usr/bin:/bin:/sbin'; bash -x " + filepath.ToSlash(cmdPath) + "\"",
 			},
 			UseIsolatedEnv: runtime.GOOS != "windows",
 			Stdin:          bytes.NewReader(inputBytes),
 		}
 	} else {
-		cmd := boshsys.Command{
+		cmd = boshsys.Command{
 			Name: cmdPath,
 			Env: map[string]string{
 				"BOSH_PACKAGES_DIR": r.cpi.PackagesDir,
