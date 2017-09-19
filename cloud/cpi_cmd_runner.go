@@ -95,14 +95,14 @@ func (r *cpiCmdRunner) Run(context CmdContext, method string, args ...interface{
 		workingDir, _ := os.Getwd()
 		workingDir = strings.Replace(workingDir, ":", "", -1)
 		decodedRune, n := utf8.DecodeRuneInString(workingDir)
-		workingDir = "/mnt/" + filepath.ToSlash(string(unicode.ToLower(decodedRune)) + workingDir[n:]) + "/"
+		workingDir = "/" + filepath.ToSlash(string(unicode.ToLower(decodedRune)) + workingDir[n:]) + "/"
 		cmd = boshsys.Command{
 			Name: "bash",
 			Args: []string{"-c", "\"export BOSH_PACKAGES_DIR='" + workingDir + filepath.ToSlash(r.cpi.PackagesDir) + "';" +
 				" export BOSH_JOBS_DIR='" + workingDir + filepath.ToSlash(r.cpi.JobsDir) + "';" +
-				" export PATH='/usr/local/bin:/usr/bin:/bin:/sbin'; bash -x " + filepath.ToSlash(cmdPath) + "\"",
+				" export PATH='/usr/local/bin:/usr/bin:/bin:/sbin:/c/Windows/System32/WindowsPowerShell/v1.0:/d/Program Files/Oracle/VirtualBox'; bash -x " + filepath.ToSlash(cmdPath) + "\"",
 			},
-			UseIsolatedEnv: runtime.GOOS != "windows",
+			UseIsolatedEnv: false,
 			Stdin:          bytes.NewReader(inputBytes),
 		}
 	} else {
@@ -113,7 +113,7 @@ func (r *cpiCmdRunner) Run(context CmdContext, method string, args ...interface{
 				"BOSH_JOBS_DIR":     r.cpi.JobsDir,
 				"PATH":              "/usr/local/bin:/usr/bin:/bin:/sbin",
 			},
-			UseIsolatedEnv: runtime.GOOS != "windows",
+			UseIsolatedEnv: true,
 			Stdin:          bytes.NewReader(inputBytes),
 		}
 	}

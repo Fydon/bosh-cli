@@ -102,7 +102,7 @@ func (c *compiler) Compile(pkg birelpkg.Compilable) (bistatepkg.CompiledPackageR
 		workingDir, _ := os.Getwd()
 		workingDir = strings.Replace(workingDir, ":", "", -1)
 		decodedRune, n := utf8.DecodeRuneInString(workingDir)
-		workingDir = "/mnt/" + filepath.ToSlash(string(unicode.ToLower(decodedRune)) + workingDir[n:]) + "/"
+		workingDir = "/" + filepath.ToSlash(string(unicode.ToLower(decodedRune)) + workingDir[n:]) + "/"
 		cmd = boshsys.Command{
 			Name: "bash",
 			Args: []string{"-c", "\"export BOSH_COMPILE_TARGET='" + workingDir + filepath.ToSlash(packageSrcDir) + "';" +
@@ -112,7 +112,7 @@ func (c *compiler) Compile(pkg birelpkg.Compilable) (bistatepkg.CompiledPackageR
 				" export PATH='/usr/local/bin:/usr/bin:/bin';" +
 				" bash -x packaging\"",
 			},
-			UseIsolatedEnv: runtime.GOOS != "windows",
+			UseIsolatedEnv: false,
 			WorkingDir:     packageSrcDir,
 		}
 	} else {
@@ -126,7 +126,7 @@ func (c *compiler) Compile(pkg birelpkg.Compilable) (bistatepkg.CompiledPackageR
 				"BOSH_PACKAGES_DIR":   c.packagesDir,
 				"PATH":                "/usr/local/bin:/usr/bin:/bin",
 			},
-			UseIsolatedEnv: runtime.GOOS != "windows",
+			UseIsolatedEnv: true,
 			WorkingDir:     packageSrcDir,
 		}
 	}
