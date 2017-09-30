@@ -4,6 +4,12 @@ import (
 	"encoding/json"
 	"errors"
 	"io/ioutil"
+	"os"
+	"path/filepath"
+	"runtime"
+	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	. "github.com/cloudfoundry/bosh-cli/cloud"
 	boshlog "github.com/cloudfoundry/bosh-utils/logger"
@@ -26,9 +32,9 @@ var _ = Describe("CpiCmdRunner", func() {
 		}
 
 		cpi = CPI{
-			JobPath:     "/jobs/cpi",
-			JobsDir:     "/jobs",
-			PackagesDir: "/packages",
+			JobPath:     filepath.Join("/", "jobs", "cpi"),
+			JobsDir:     filepath.Join("/", "jobs"),
+			PackagesDir: filepath.Join("/", "packages"),
 		}
 
 		cmdRunner = fakesys.NewFakeCmdRunner()
@@ -46,21 +52,37 @@ var _ = Describe("CpiCmdRunner", func() {
 				Stdout:     string(outputBytes),
 				ExitStatus: 0,
 			}
-			cmdRunner.AddCmdResult("/jobs/cpi/bin/cpi", result)
+			cmdRunner.AddCmdResult(filepath.Join("/", "jobs", "cpi", "bin", "cpi"), result)
 
 			_, err = cpiCmdRunner.Run(context, "fake-method", "fake-argument-1", "fake-argument-2")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(cmdRunner.RunComplexCommands).To(HaveLen(1))
 
 			actualCmd := cmdRunner.RunComplexCommands[0]
-			Expect(actualCmd.Name).To(Equal("/jobs/cpi/bin/cpi"))
-			Expect(actualCmd.Args).To(BeNil())
-			Expect(actualCmd.Env).To(Equal(map[string]string{
-				"BOSH_PACKAGES_DIR": cpi.PackagesDir,
-				"BOSH_JOBS_DIR":     cpi.JobsDir,
-				"PATH":              "/usr/local/bin:/usr/bin:/bin:/sbin",
-			}))
-			Expect(actualCmd.UseIsolatedEnv).To(BeTrue())
+			if runtime.GOOS == "windows" {
+				workingDir, _ := os.Getwd()
+				workingDir = strings.Replace(workingDir, ":", "", -1)
+				decodedRune, n := utf8.DecodeRuneInString(workingDir)
+				workingDir = "/" + filepath.ToSlash(string(unicode.ToLower(decodedRune)) + workingDir[n:]) + "/"
+				Expect(actualCmd.Name).To(Equal(filepath.Join("/", "jobs", "cpi", "bin", "cpi")))
+				Expect(actualCmd.Args).To([]string{
+					"-c",
+					"\"export BOSH_PACKAGES_DIR='" + workingDir + filepath.ToSlash(cpi.PackagesDir) + "';" +
+					" export BOSH_JOBS_DIR='" + workingDir + filepath.ToSlash(cpi.JobsDir) + "';" +
+					" export PATH='/usr/local/bin:/usr/bin:/bin:/sbin:/c/Windows/System32/WindowsPowerShell/v1.0:/d/Program Files/Oracle/VirtualBox'; bash -x /jobs/cpi/bin/cpi\"",
+				})
+				Expect(actualCmd.Env).To(BeNil())
+				Expect(actualCmd.UseIsolatedEnv).To(BeFalse())
+			} else {
+				Expect(actualCmd.Name).To(Equal("/jobs/cpi/bin/cpi")))
+				Expect(actualCmd.Args).To(BeNil())
+				Expect(actualCmd.Env).To(Equal(map[string]string{
+					"BOSH_PACKAGES_DIR": cpi.PackagesDir,
+					"BOSH_JOBS_DIR":     cpi.JobsDir,
+					"PATH":              "/usr/local/bin:/usr/bin:/bin:/sbin",
+				}))
+				Expect(actualCmd.UseIsolatedEnv).To(BeTrue())
+			}
 			bytes, err := ioutil.ReadAll(actualCmd.Stdin)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(string(bytes)).To(Equal(
@@ -84,7 +106,7 @@ var _ = Describe("CpiCmdRunner", func() {
 					Stdout:     string(outputBytes),
 					ExitStatus: 0,
 				}
-				cmdRunner.AddCmdResult("/jobs/cpi/bin/cpi", result)
+				cmdRunner.AddCmdResult(filepath.Join("/", "jobs", "cpi", "bin", "cpi"), result)
 			})
 
 			It("returns the result", func() {
@@ -103,7 +125,7 @@ var _ = Describe("CpiCmdRunner", func() {
 				result := fakesys.FakeCmdResult{
 					Error: errors.New("fake-error-trying-to-run-command"),
 				}
-				cmdRunner.AddCmdResult("/jobs/cpi/bin/cpi", result)
+				cmdRunner.AddCmdResult(filepath.Join("/", "jobs", "cpi", "bin", "cpi"), result)
 			})
 
 			It("returns an error", func() {
@@ -128,7 +150,7 @@ var _ = Describe("CpiCmdRunner", func() {
 					Stdout:     string(outputBytes),
 					ExitStatus: 0,
 				}
-				cmdRunner.AddCmdResult("/jobs/cpi/bin/cpi", result)
+				cmdRunner.AddCmdResult(filepath.Join("/", "jobs", "cpi", "bin", "cpi"), result)
 			})
 
 			It("returns the command output and no error", func() {

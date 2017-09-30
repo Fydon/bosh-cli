@@ -2,7 +2,12 @@ package pkg_test
 
 import (
 	"errors"
+	"os"
 	"path/filepath"
+	"runtime"
+	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	fakeblobstore "github.com/cloudfoundry/bosh-utils/blobstore/fakes"
 	boshcrypto "github.com/cloudfoundry/bosh-utils/crypto"
@@ -68,7 +73,7 @@ var _ = Describe("PackageCompiler", func() {
 
 		dependency1 = birelpkg.NewPackage(NewResource("pkg-dep1-name", "", nil), nil)
 		dependency2 = birelpkg.NewPackage(NewResource("pkg-dep2-name", "", nil), nil)
-		pkg = birelpkg.NewExtractedPackage(NewResource("pkg1-name", "", nil), []string{"pkg-dep1-name", "pkg-dep2-name"}, "/pkg-dir", fs)
+		pkg = birelpkg.NewExtractedPackage(NewResource("pkg1-name", "", nil), []string{"pkg-dep1-name", "pkg-dep2-name"}, filepath.Join("/", "pkg-dir"), fs)
 		pkg.AttachDependencies([]*birelpkg.Package{dependency1, dependency2})
 
 		compiler = NewPackageCompiler(
@@ -116,7 +121,7 @@ var _ = Describe("PackageCompiler", func() {
 			mockCompiledPackageRepo.EXPECT().Find(dependency2).Return(dep2, true, nil).AnyTimes()
 
 			// packaging file created when source is extracted
-			fs.WriteFileString("/pkg-dir/packaging", "")
+			fs.WriteFileString(filepath.Join("/", "pkg-dir", "packaging"), "")
 
 			compressor.CompressFilesInDirTarballPath = compiledPackageTarballPath
 
@@ -162,18 +167,38 @@ var _ = Describe("PackageCompiler", func() {
 			_, _, err := compiler.Compile(pkg)
 			Expect(err).ToNot(HaveOccurred())
 
-			expectedCmd := boshsys.Command{
-				Name: "bash",
-				Args: []string{"-x", "packaging"},
-				Env: map[string]string{
-					"BOSH_COMPILE_TARGET": "/pkg-dir",
-					"BOSH_INSTALL_TARGET": installPath,
-					"BOSH_PACKAGE_NAME":   "pkg1-name",
-					"BOSH_PACKAGES_DIR":   packagesDir,
-					"PATH":                "/usr/local/bin:/usr/bin:/bin",
-				},
-				UseIsolatedEnv: true,
-				WorkingDir:     "/pkg-dir",
+			var expectedCmd boshsys.Command
+			if runtime.GOOS != "windows" {
+				workingDir, _ := os.Getwd()
+				workingDir = strings.Replace(workingDir, ":", "", -1)
+				decodedRune, n := utf8.DecodeRuneInString(workingDir)
+				workingDir = "/" + filepath.ToSlash(string(unicode.ToLower(decodedRune)) + workingDir[n:]) + "/"
+				expectedCmd = boshsys.Command{
+					Name: "bash",
+					Args: []string{"-c", "\"export BOSH_COMPILE_TARGET='" + workingDir + "/pkg-dir';" +
+						" export BOSH_INSTALL_TARGET='" + workingDir + filepath.ToSlash(installPath) + "';" +
+						" export BOSH_PACKAGE_NAME='pkg1-name';" +
+						" export BOSH_PACKAGES_DIR='" + workingDir + filepath.ToSlash(packagesDir) + "';" +
+						" export PATH='/usr/local/bin:/usr/bin:/bin';" +
+						" bash -x packaging\"",
+					},
+					UseIsolatedEnv: false,
+					WorkingDir:     "\\pkg-dir"),
+				}
+			} else {
+				expectedCmd = boshsys.Command{
+					Name: "bash",
+					Args: []string{"-x", "packaging"},
+					Env: map[string]string{
+						"BOSH_COMPILE_TARGET": "/pkg-dir"),
+						"BOSH_INSTALL_TARGET": installPath,
+						"BOSH_PACKAGE_NAME":   "pkg1-name",
+						"BOSH_PACKAGES_DIR":   packagesDir,
+						"PATH":                "/usr/local/bin:/usr/bin:/bin",
+					},
+					UseIsolatedEnv: true,
+					WorkingDir:     "/pkg-dir"),
+				}
 			}
 
 			Expect(runner.RunComplexCommands).To(HaveLen(1))
