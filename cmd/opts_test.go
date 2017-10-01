@@ -750,6 +750,12 @@ var _ = Describe("Opts", func() {
 				`long:"state" value-name:"PATH" description:"State file path"`,
 			))
 		})
+
+		It("has --recreate", func() {
+			Expect(getStructTagForName("Recreate", opts)).To(Equal(
+				`long:"recreate" description:"Recreate VM in deployment"`,
+			))
+		})
 	})
 
 	Describe("CreateEnvArgs", func() {
@@ -1357,6 +1363,12 @@ var _ = Describe("Opts", func() {
 				`long:"empty-image" description:"Pack zero byte file instead of image"`,
 			))
 		})
+
+		It("has --format", func() {
+			Expect(getStructTagForName("Format", opts)).To(Equal(
+				`long:"format" description:"Repacked stemcell formats. Can be used multiple times. Overrides existing formats."`,
+			))
+		})
 	})
 
 	Describe("RepackStemcellArgs", func() {
@@ -1531,6 +1543,15 @@ var _ = Describe("Opts", func() {
 				))
 			})
 		})
+
+		Describe("Jobs", func() {
+			It("contains desired value", func() {
+				Expect(getStructTagForName("Jobs", opts)).To(Equal(
+					`long:"job" description:"Name of job to export"`,
+				))
+			})
+		})
+
 	})
 
 	Describe("ExportReleaseArgs", func() {
@@ -2508,6 +2529,52 @@ var _ = Describe("Opts", func() {
 			It("contains desired values", func() {
 				Expect(getStructTagForName("Name", opts)).To(Equal(
 					`positional-arg-name:"NAME"`,
+				))
+			})
+		})
+	})
+
+	Describe("VendorPackageOpts", func() {
+		var opts *VendorPackageOpts
+
+		BeforeEach(func() {
+			opts = &VendorPackageOpts{}
+		})
+
+		Describe("Args", func() {
+			It("contains desired values", func() {
+				Expect(getStructTagForName("Args", opts)).To(Equal(`positional-args:"true" required:"true"`))
+			})
+		})
+
+		Describe("Directory", func() {
+			It("contains desired values", func() {
+				Expect(getStructTagForName("Directory", opts)).To(Equal(
+					`long:"dir" description:"Release directory path if not current working directory" default:"."`,
+				))
+			})
+		})
+	})
+
+	Describe("VendorPackageArgs", func() {
+		var opts *VendorPackageArgs
+
+		BeforeEach(func() {
+			opts = &VendorPackageArgs{}
+		})
+
+		Describe("URL", func() {
+			It("contains desired values", func() {
+				Expect(getStructTagForName("URL", opts)).To(Equal(
+					`positional-arg-name:"SRC-DIR" default:"."`,
+				))
+			})
+		})
+
+		Describe("PackageName", func() {
+			It("contains desired values", func() {
+				Expect(getStructTagForName("PackageName", opts)).To(Equal(
+					`positional-arg-name:"PACKAGE"`,
 				))
 			})
 		})

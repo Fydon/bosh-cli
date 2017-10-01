@@ -142,6 +142,7 @@ type BoshOpts struct {
 	GenerateJob     GenerateJobOpts     `command:"generate-job"                description:"Generate job"`
 	GeneratePackage GeneratePackageOpts `command:"generate-package"            description:"Generate package"`
 	CreateRelease   CreateReleaseOpts   `command:"create-release"   alias:"cr" description:"Create release"`
+	VendorPackage   VendorPackageOpts   `command:"vendor-package"              description:"Vendor package"`
 
 	// Hidden
 	Sha1ifyRelease  Sha1ifyReleaseOpts  `command:"sha1ify-release"  hidden:"true" description:"Convert release tarball to use SHA1"`
@@ -168,6 +169,7 @@ type CreateEnvOpts struct {
 	VarFlags
 	OpsFlags
 	StatePath string `long:"state" value-name:"PATH" description:"State file path"`
+	Recreate  bool   `long:"recreate" description:"Recreate VM in deployment"`
 	cmd
 }
 
@@ -452,6 +454,7 @@ type RepackStemcellOpts struct {
 	Name            string             `long:"name" description:"Repacked stemcell name"`
 	CloudProperties string             `long:"cloud-properties" description:"Repacked stemcell cloud properties"`
 	EmptyImage      bool               `long:"empty-image" description:"Pack zero byte file instead of image"`
+	Format          []string           `long:"format" description:"Repacked stemcell formats. Can be used multiple times. Overrides existing formats."`
 	Version         string             `long:"version" description:"Repacked stemcell version"`
 
 	cmd
@@ -509,6 +512,7 @@ type ExportReleaseOpts struct {
 
 	Directory DirOrCWDArg `long:"dir" description:"Destination directory" default:"."`
 
+	Jobs []string `long:"job" description:"Name of job to export"`
 	cmd
 }
 
@@ -810,6 +814,19 @@ type GeneratePackageOpts struct {
 
 type GeneratePackageArgs struct {
 	Name string `positional-arg-name:"NAME"`
+}
+
+type VendorPackageOpts struct {
+	Args VendorPackageArgs `positional-args:"true" required:"true"`
+
+	Directory DirOrCWDArg `long:"dir" description:"Release directory path if not current working directory" default:"."`
+
+	cmd
+}
+
+type VendorPackageArgs struct {
+	PackageName string      `positional-arg-name:"PACKAGE"`
+	URL         DirOrCWDArg `positional-arg-name:"SRC-DIR" default:"."`
 }
 
 type Sha1ifyReleaseOpts struct {
