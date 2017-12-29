@@ -6,6 +6,7 @@ import (
 	"io"
 	"io/ioutil"
 	"regexp"
+	"runtime"
 	"strings"
 	"text/template"
 
@@ -223,7 +224,12 @@ var _ = Describe("bosh", func() {
 	}
 
 	BeforeSuite(func() {
-		err := bitestutils.BuildExecutableForArch("linux-amd64")
+		var err error
+		if runtime.GOOS == "windows" {
+			err = bitestutils.BuildExecutableForArch("windows-amd64")
+		} else {
+			err = bitestutils.BuildExecutableForArch("linux-amd64")
+		}
 		Expect(err).NotTo(HaveOccurred())
 	})
 

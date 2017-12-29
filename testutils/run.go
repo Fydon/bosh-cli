@@ -3,6 +3,7 @@ package testutils
 import (
 	"fmt"
 	"os/exec"
+	"runtime"
 	"time"
 
 	"github.com/onsi/ginkgo"
@@ -19,7 +20,14 @@ func BuildExecutableForArch(arch string) error {
 		buildArg = buildArg + "-" + arch
 	}
 
-	session, err := RunCommand(buildArg)
+	var session *gexec.Session
+	var err error
+	if runtime.GOOS == "windows" {
+		session, err = RunCommand("bash", "-c", buildArg)
+	} else {
+		session, err = RunCommand(buildArg)
+	}
+
 	if session.ExitCode() != 0 {
 		return fmt.Errorf("Failed to build bosh:\nstdout:\n%s\nstderr:\n%s", session.Out.Contents(), session.Err.Contents())
 	}

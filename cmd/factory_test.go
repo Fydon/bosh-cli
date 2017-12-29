@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 
 	boshlog "github.com/cloudfoundry/bosh-utils/logger"
 	fakesys "github.com/cloudfoundry/bosh-utils/system/fakes"
@@ -215,7 +216,11 @@ var _ = Describe("Factory", func() {
 		It("errors when excluding = from --skip-drain", func() {
 			_, err := factory.New([]string{"deploy", "--skip-drain", "job1", fakeFilePath})
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(Equal("Not found: open job1: no such file or directory"))
+			if runtime.GOOS == "windows" {
+				Expect(err.Error()).To(Equal("Not found: open job1: The system cannot find the file specified."))
+			} else {
+				Expect(err.Error()).To(Equal("Not found: open job1: no such file or directory"))
+			}
 		})
 
 		It("defaults --skip-drain option value to all", func() {
@@ -235,7 +240,11 @@ var _ = Describe("Factory", func() {
 
 			_, err := factory.New([]string{"create-env", "manifest.yml"})
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("open manifest.yml: no such file or directory"))
+			if runtime.GOOS == "windows" {
+				Expect(err.Error()).To(ContainSubstring("Not found: open manifest.yml: The system cannot find the file specified."))
+			} else {
+				Expect(err.Error()).To(ContainSubstring("open manifest.yml: no such file or directory"))
+			}
 		})
 	})
 
