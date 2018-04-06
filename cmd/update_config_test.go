@@ -12,6 +12,7 @@ import (
 	fakedir "github.com/cloudfoundry/bosh-cli/director/directorfakes"
 	boshtpl "github.com/cloudfoundry/bosh-cli/director/template"
 	fakeui "github.com/cloudfoundry/bosh-cli/ui/fakes"
+	boshtbl "github.com/cloudfoundry/bosh-cli/ui/table"
 )
 
 var _ = Describe("UpdateConfigCmd", func() {
@@ -35,9 +36,9 @@ var _ = Describe("UpdateConfigCmd", func() {
 		BeforeEach(func() {
 			opts = UpdateConfigOpts{
 				Args: UpdateConfigArgs{
-					Type:   "my-type",
 					Config: FileBytesArg{Bytes: []byte("fake-config")},
 				},
+				Type: "my-type",
 				Name: "my-name",
 			}
 		})
@@ -89,24 +90,33 @@ var _ = Describe("UpdateConfigCmd", func() {
 			Expect(bytes).To(Equal([]byte("name1: val1-from-kv\nname2: val2-from-file\nxyz: val\n")))
 		})
 
-		It("handles latest config errors besides no config", func() {
-			director.LatestConfigReturns(boshdir.Config{}, errors.New("fake-connection-error"))
-			err := act()
-			Expect(err).To(HaveOccurred())
-		})
-
-		It("ignores the error for existing config while checking if upload is required", func() {
-			director.LatestConfigReturns(boshdir.Config{}, errors.New("No config"))
+		It("outputs a table that should be transposed", func() {
 			err := act()
 			Expect(err).ToNot(HaveOccurred())
+
+			Expect(ui.Table.Transpose).To(Equal(true))
 		})
 
-		It("does not update, instead prints message and exits with success for same content", func() {
-			director.LatestConfigReturns(boshdir.Config{Content: "fake-content"}, nil)
+		It("output table contains headers and rows", func() {
 			err := act()
-			Expect(err).NotTo(HaveOccurred())
-			Expect(director.UpdateConfigCallCount()).To(Equal(0))
-			Expect(ui.Said).To(ContainElement("no changes in config, nothing to update\n"))
+			Expect(err).ToNot(HaveOccurred())
+
+			Expect(ui.Table.Header).To(Equal([]boshtbl.Header{
+				boshtbl.NewHeader("ID"),
+				boshtbl.NewHeader("Type"),
+				boshtbl.NewHeader("Name"),
+				boshtbl.NewHeader("Created At"),
+				boshtbl.NewHeader("Content"),
+			}))
+			Expect(ui.Table.Rows).To(Equal([][]boshtbl.Value{
+				{
+					boshtbl.NewValueString(""),
+					boshtbl.NewValueString(""),
+					boshtbl.NewValueString(""),
+					boshtbl.NewValueString(""),
+					boshtbl.NewValueString(""),
+				},
+			}))
 		})
 
 		It("does not update if confirmation is rejected", func() {
@@ -120,7 +130,7 @@ var _ = Describe("UpdateConfigCmd", func() {
 		})
 
 		It("returns error if updating failed", func() {
-			director.UpdateConfigReturns(errors.New("fake-err"))
+			director.UpdateConfigReturns(boshdir.Config{}, errors.New("fake-err"))
 
 			err := act()
 			Expect(err).To(HaveOccurred())
@@ -155,9 +165,9 @@ var _ = Describe("UpdateConfigCmd", func() {
 			BeforeEach(func() {
 				opts = UpdateConfigOpts{
 					Args: UpdateConfigArgs{
-						Type:   "my-type",
 						Config: FileBytesArg{Bytes: []byte("---")},
 					},
+					Type: "my-type",
 					Name: "",
 				}
 			})

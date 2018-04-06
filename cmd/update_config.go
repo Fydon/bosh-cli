@@ -24,21 +24,12 @@ func (c UpdateConfigCmd) Run(opts UpdateConfigOpts) error {
 		return bosherr.WrapErrorf(err, "Evaluating config")
 	}
 
-	configDiff, err := c.director.DiffConfig(opts.Args.Type, opts.Name, bytes)
+	configDiff, err := c.director.DiffConfig(opts.Type, opts.Name, bytes)
 	if err != nil {
 		return err
 	}
 
-	config, err := c.director.LatestConfig(opts.Args.Type, opts.Name)
-	if err != nil && err.Error() != "No config" {
-		return err
-	}
-
 	diff := NewDiff(configDiff.Diff)
-	if (config != boshdir.Config{} && len(diff.lines) == 0) {
-		c.ui.PrintLinef("no changes in config, nothing to update\n")
-		return nil
-	}
 	diff.Print(c.ui)
 
 	err = c.ui.AskForConfirmation()
@@ -46,5 +37,12 @@ func (c UpdateConfigCmd) Run(opts UpdateConfigOpts) error {
 		return err
 	}
 
-	return c.director.UpdateConfig(opts.Args.Type, opts.Name, bytes)
+	config, err := c.director.UpdateConfig(opts.Type, opts.Name, bytes)
+	if err != nil {
+		return err
+	}
+
+	ConfigTable{config, c.ui}.Print()
+
+	return nil
 }
