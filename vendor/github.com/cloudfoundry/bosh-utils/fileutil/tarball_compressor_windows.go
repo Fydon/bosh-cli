@@ -28,13 +28,13 @@ func (c tarballCompressor) CompressSpecificFilesInDir(dir string, files []string
 		return "", bosherr.WrapError(err, "Converting dir path failed")
 	}
 
-	args := []string{"czf", tarballPathForTar, "-C", dir}
+	args := []string{"tar", "czf", tarballPathForTar, "-C", dir}
 
 	for _, file := range files {
 		args = append(args, file)
 	}
 
-	_, _, _, err = c.cmdRunner.RunCommand("tar", args...)
+	_, _, _, err = c.cmdRunner.RunCommand("powershell", args...)
 	if err != nil {
 		return "", bosherr.WrapError(err, "Shelling out to tar")
 	}
@@ -57,7 +57,7 @@ func (c tarballCompressor) DecompressFileToDir(tarballPath string, dir string, o
 		return bosherr.WrapError(err, "Converting dir path failed")
 	}
 
-	_, _, _, err = c.cmdRunner.RunCommand("tar", sameOwnerOption, "-xzf", tarballPath, "-C", dir)
+	_, _, _, err = c.cmdRunner.RunCommand("powershell", "tar", sameOwnerOption, "-xzf", tarballPath, "-C", dir)
 	if err != nil {
 		return bosherr.WrapError(err, "Shelling out to tar")
 	}
